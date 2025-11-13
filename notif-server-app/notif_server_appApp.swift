@@ -21,10 +21,11 @@ struct notif_server_appApp: App {
 
 
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
     var notificationManager = NotificationManager()
+    var eventMonitor: EventMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Request notification permissions
@@ -48,10 +49,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover?.contentSize = NSSize(width: 300, height: 400)
         popover?.behavior = .transient
         popover?.animates = false
+        popover?.delegate = self
         popover?.contentViewController = NSHostingController(rootView: ContentView())
 
         // Start polling for notifications
         notificationManager.startPolling()
+
+        // Setup event monitor to close popover on click away
+        eventMonitor = EventMonitor(mask: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            if let strongSelf = self, strongSelf.popover?.isShown == true {
+                strongSelf.popover?.performClose(nil)
+            }
+        }
     }
 
     func requestNotificationPermissions() {
@@ -75,11 +84,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             // Left click - toggle popover
             if popover?.isShown == true {
-                popover?.performClose(nil)
+                closePopover()
             } else {
-                popover?.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+                showPopover(sender)
             }
         }
+    }
+
+    func showPopover(_ sender: NSStatusBarButton) {
+        popover?.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+        eventMonitor?.start()
+    }
+
+    func closePopover() {
+        popover?.performClose(nil)
+        eventMonitor?.stop()
     }
 
     func showMenu() {
