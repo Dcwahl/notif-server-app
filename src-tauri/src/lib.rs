@@ -1,13 +1,11 @@
 use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use tauri::WebviewWindowBuilder;
 use tauri_plugin_notification::NotificationExt;
-//use tauri::image::Image;
 use serde::Deserialize;
 use std::sync::Mutex;
 use tokio::time::Duration;
-
-//TODO: whole window situation, https://docs.rs/tauri/2.0.0/tauri/window/struct.Window.html
 
 struct AppState {
     last_seen_id: Mutex<u64>,
@@ -21,7 +19,6 @@ struct Notification {
     timestamp: String,
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -42,18 +39,16 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![greet])
         .setup(|app| {
-            //this just means don't show in dock:
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            //little tray icon:
             let icon_bytes = include_bytes!("../icons/lemon.png");
             let icon_image = image::load_from_memory(icon_bytes)
                 .expect("Failed to load icon")
                 .to_rgba8();
             let (width, height) = icon_image.dimensions();
             let icon = tauri::image::Image::new_owned(icon_image.into_raw(), width, height);
-            //do like a right click menu i guess
+            
             let menu = Menu::new(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             menu.append(&quit_item)?;
@@ -61,20 +56,54 @@ pub fn run() {
             let tray = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
+                .on_tray_icon_event(|tray, event| {
+                    match event {
+                        tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            ..
+                        } => {
+                            println!("Tray icon left-clicked!");
+                            
+                            let app = tray.app_handle();
+                            
+                            // Try to get existing window first
+                            if let Some(window) = app.get_webview_window("notifications") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            } else {
+                                // Create new window if it doesn't exist
+                                let _ = WebviewWindowBuilder::new(
+                                    app, 
+                                    "notifications", 
+                                    tauri::WebviewUrl::App("/index.html".into())
+                                )
+                                .title("Notifications")
+                                .inner_size(400.0, 600.0)
+                                .resizable(true)
+                                .build();
+                            }
+                        }
+                        tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Right,
+                            ..
+                        } => {
+                            println!("Tray icon right-clicked!");
+                        }
+                        _ => {}
+                    }
+                })
                 .build(app)?;
 
             let app_handle = app.handle().clone();
 
-            //our little timed loop:
             tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(30));
                 loop {
-                    interval.tick().await; //30 sec interval
+                    interval.tick().await;
 
                     match reqwest::get("http://localhost:3000/notifications").await {
                         Ok(resp) => match resp.text().await {
                             Ok(text) => {
-                                // Usa app_handle en vez de app:
                                 let notifications: Vec<Notification> =
                                     match serde_json::from_str(&text) {
                                         Ok(n) => n,
