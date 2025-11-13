@@ -16,10 +16,15 @@ struct AppNotification: Codable, Identifiable {
 }
 
 class NotificationManager: ObservableObject {
-    @Published var notifications: [AppNotification] = []
+    @Published var notifications: [AppNotification] = [] {
+        didSet {
+            saveNotifications()
+        }
+    }
     private var timer: Timer?
     private let defaults = UserDefaults.standard
     private let lastSeenIdKey = "lastSeenNotificationId"
+    private let notificationsKey = "savedNotifications"
 
     var lastSeenId: Int64 {
         get {
@@ -28,6 +33,10 @@ class NotificationManager: ObservableObject {
         set {
             defaults.set(newValue, forKey: lastSeenIdKey)
         }
+    }
+
+    init() {
+        loadNotifications()
     }
 
     func startPolling() {
@@ -118,5 +127,25 @@ class NotificationManager: ObservableObject {
     func stopPolling() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func loadNotifications() {
+        if let data = defaults.data(forKey: notificationsKey) {
+            do {
+                notifications = try JSONDecoder().decode([AppNotification].self, from: data)
+                print("📦 Loaded \(notifications.count) persisted notifications")
+            } catch {
+                print("Error loading notifications: \(error)")
+            }
+        }
+    }
+
+    private func saveNotifications() {
+        do {
+            let data = try JSONEncoder().encode(notifications)
+            defaults.set(data, forKey: notificationsKey)
+        } catch {
+            print("Error saving notifications: \(error)")
+        }
     }
 }

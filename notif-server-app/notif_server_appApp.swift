@@ -50,7 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover?.behavior = .transient
         popover?.animates = false
         popover?.delegate = self
-        popover?.contentViewController = NSHostingController(rootView: ContentView())
+        popover?.contentViewController = NSHostingController(rootView: ContentView(notificationManager: notificationManager))
 
         // Start polling for notifications
         notificationManager.startPolling()
