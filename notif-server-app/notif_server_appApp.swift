@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     var popover: NSPopover?
     var notificationManager = NotificationManager()
     var eventMonitor: EventMonitor?
+    var creationWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Request notification permissions
@@ -104,6 +105,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func showMenu() {
         let menu = NSMenu()
 
+        menu.addItem(NSMenuItem(title: "New Notification...", action: #selector(showCreationWindow), keyEquivalent: "n"))
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Reset Last Seen ID", action: #selector(resetLastSeenId), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q"))
@@ -115,6 +118,82 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc func resetLastSeenId() {
         notificationManager.resetLastSeenId()
+    }
+
+    @objc func showCreationWindow() {
+        if let window = creationWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let contentView = NotificationCreationView(
+            onSubmit: { [weak self] title, message, scheduledTime in
+                self?.sendNotification(title: title, message: message, scheduledTime: scheduledTime)
+            },
+            onClose: { [weak self] in
+                self?.creationWindow?.close()
+            }
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 470, height: 250),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.styleMask.remove(.resizable)
+        window.center()
+        window.contentView = NSHostingController(rootView: contentView).view
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.isMovableByWindowBackground = true
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.hasShadow = true
+
+        creationWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func sendNotification(title: String, message: String, scheduledTime: Date) {
+        guard let url = URL(string: "http://localhost:3000/notifications") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let scheduledTimeString = isoFormatter.string(from: scheduledTime)
+
+        let body: [String: Any] = [
+            "title": title,
+            "message": message,
+            "scheduled_for": scheduledTimeString
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        } catch {
+            print("Error encoding notification: \(error)")
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error sending notification: \(error)")
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse {
+                print("Notification sent with status: \(httpResponse.statusCode)")
+            }
+        }.resume()
     }
 
     @objc func quitApp() {
