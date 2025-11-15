@@ -11,8 +11,9 @@ struct NotificationCreationView: View {
     @State private var title = ""
     @State private var message = ""
     @State private var scheduledTime = Date()
+    @State private var isScheduled = false
 
-    var onSubmit: (String, String, Date) -> Void
+    var onSubmit: (String, String, Date?) -> Void
     var onClose: () -> Void
 
     var body: some View {
@@ -27,9 +28,13 @@ struct NotificationCreationView: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
 
-            DatePicker("Send at", selection: $scheduledTime, in: Date()...)
-                .datePickerStyle(.field)
-                .controlSize(.large)
+            Toggle("Schedule?", isOn: $isScheduled)
+
+            if isScheduled {
+                DatePicker("Send at", selection: $scheduledTime, in: Date()...)
+                    .datePickerStyle(.field)
+                    .controlSize(.large)
+            }
 
             HStack {
                 Spacer()
@@ -39,7 +44,7 @@ struct NotificationCreationView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Send") {
-                    onSubmit(title, message, scheduledTime)
+                    onSubmit(title, message, isScheduled ? scheduledTime : nil)
                     onClose()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -51,13 +56,20 @@ struct NotificationCreationView: View {
         .background(Color(NSColor.windowBackgroundColor))
         .cornerRadius(8)
         .shadow(radius: 10)
+        .onAppear {
+            scheduledTime = Date()
+        }
     }
 }
 
 #Preview {
     NotificationCreationView(
         onSubmit: { title, message, scheduledTime in
-            print("Title: \(title), Message: \(message), Time: \(scheduledTime)")
+            if let time = scheduledTime {
+                print("Title: \(title), Message: \(message), Time: \(time)")
+            } else {
+                print("Title: \(title), Message: \(message), Send immediately")
+            }
         },
         onClose: {
             print("Closed")

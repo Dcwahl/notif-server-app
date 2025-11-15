@@ -160,22 +160,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func sendNotification(title: String, message: String, scheduledTime: Date) {
+    func sendNotification(title: String, message: String, scheduledTime: Date?) {
         guard let url = URL(string: "http://localhost:3000/notifications") else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let scheduledTimeString = isoFormatter.string(from: scheduledTime)
-
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "title": title,
-            "message": message,
-            "scheduled_for": scheduledTimeString
+            "message": message
         ]
+
+        if let scheduledTime = scheduledTime {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let scheduledTimeString = isoFormatter.string(from: scheduledTime)
+            body["scheduled_for"] = scheduledTimeString
+        }
 
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
